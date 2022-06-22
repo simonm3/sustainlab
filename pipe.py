@@ -1,28 +1,17 @@
-import spacy
 import pikepdf
 import PyPDF2
 import os
 import re
-import numpy as np
+import pandas as pd
+from utils import nlp, spaced
+
 import logging
 
 log = logging.getLogger(__name__)
 
-nlp = spacy.load("en_core_web_sm")
-
-
-def sample(accepted, dropped, n=5):
-    for x in np.random.choice(accepted, n):
-        print(x)
-        print("")
-    print("*" * 25)
-    for x in np.random.choice(dropped, n):
-        print(x)
-        print("")
-
 
 def decrypt(path):
-    """ decrypt pdf. pypdf2 cannot read encrypted even if no password
+    """decrypt pdf. pypdf2 cannot read encrypted even if no password
     cached as takes 12 seconds
     """
     os.makedirs("decrypted", exist_ok=True)
@@ -39,7 +28,7 @@ def decrypt(path):
 
 
 def pdf2text(path, pages=9999999):
-    """ return text from pdf"""
+    """return text from pdf"""
     # try to extract text rather than image
     pdf = PyPDF2.PdfFileReader(path)
     pages = [p.extractText() for p in pdf.pages[:pages]]
@@ -85,7 +74,7 @@ def row_filter(text):
 
 
 def sentence_filter(rows):
-    """ split into sentences and filter 
+    """split into sentences and filter
     rule based. nouns>=2 and (verbs+aux)>=1
     """
     text = "\n".join(rows)
@@ -117,8 +106,33 @@ def sentence_filter(rows):
 def quant_filter(sents):
     valid = []
     for sent in sents:
-        nlp1 = nlp(sent.text)
+        nlp1 = nlp(sent)
         labels = [ent.label_ for ent in nlp1.ents]
         if any(x in ["CARDINAL", "ORDINAL", "PERCENT", "MONEY"] for x in labels):
             valid.append(sent)
     return valid
+
+
+def get_topics(sents, topic2kw):
+    """ 
+    generate topics for sentences using ngram matching
+    :param sents: sentences
+    :return: dataframe with sentence, topic1, topic2, keywords1, keywords2
+    """
+    out = []
+    for sent in sents:
+        topics = dict()
+        for k, v in topic2kw.items():
+            s = " | ".join(v)
+            s = spaced(s)
+            ngrams = [x.strip() for x in re.findall(s, sent)]
+            if len(ngrams) > 0:
+                topics[k] = ngrams
+        topics = dict(sorted(topics.items(), key=lambda x: len(x[1]), reverse=True))
+        res = dict(sent=sent, ntopics=len(topics))
+        if len(topics) >= 1:
+            res["topic1"], res["keywords1"] = list(topics.items())[0]
+        if len(topics) >= 2:
+            res["topic2"], res["keywords2"] = list(topics.items())[1]
+        out.append(res)
+    return pd.DataFrame(out)
