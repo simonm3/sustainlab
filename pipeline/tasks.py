@@ -1,34 +1,24 @@
-import pikepdf
-import PyPDF2
 import os
 import re
 import pandas as pd
-from utils import nlp, spaced
+from functools import partial
+from .utils import nlp, spaced, combine
+from prefectx.makefile import task
+import PyPDF2
 
 import logging
 
 log = logging.getLogger(__name__)
 
-
-def decrypt(path):
-    """decrypt pdf. pypdf2 cannot read encrypted even if no password
-    cached as takes 12 seconds
-    """
-    os.makedirs("decrypted", exist_ok=True)
-    with open(path, "rb") as f:
-        pdf = PyPDF2.PdfFileReader(f)
-    if pdf.is_encrypted:
-        decrypted = f"decrypted/{os.path.basename(path)}"
-        if not os.path.exists(decrypted):
-            with open(decrypted, "wb") as f:
-                pikepdf.Pdf.open(path).save(decrypted)
-        return decrypted
-    else:
-        return path
+task = partial(
+    task, target="working/{taskname}/{os.path.basename(os.path.splitext(path)[0])}"
+)
 
 
+@task
 def pdf2text(path, pages=9999999):
     """return text from pdf"""
+
     # try to extract text rather than image
     pdf = PyPDF2.PdfFileReader(path)
     pages = [p.extractText() for p in pdf.pages[:pages]]
@@ -51,7 +41,8 @@ def pdf2text(path, pages=9999999):
     return text
 
 
-def row_filter(text):
+@task
+def row_filter(text, path=None):
     # remove headers
     dropped = []
     accepted = []
@@ -65,18 +56,18 @@ def row_filter(text):
                 r.find("....") >= 0,
             ]
         ):
-            log.debug(f"ROW DROPPED={r}")
             dropped.append(r)
         else:
-            log.debug(f"ROW ACCEPTED={r}")
             accepted.append(r)
-    return accepted, dropped
+    return combine(accepted, dropped)
 
 
-def sentence_filter(rows):
+@task
+def sentence_filter(rows, path=None):
     """split into sentences and filter
     rule based. nouns>=2 and (verbs+aux)>=1
     """
+    rows = rows[rows.accepted].text
     text = "\n".join(rows)
     # hyphenated words
     text = text.replace("-\n", "")
@@ -87,7 +78,7 @@ def sentence_filter(rows):
 
     doc = nlp(text)
 
-    sents = []
+    accepted = []
     dropped = []
     for sent in doc.sents:
         nouns = sum([token.pos_ in ["NOUN", "PROPN", "PRON"] for token in sent])
@@ -95,30 +86,35 @@ def sentence_filter(rows):
         log.debug(sent.text)
         log.debug((nouns, verbs))
         if (nouns >= 2) and (verbs >= 1):
-            log.debug("*********** ACCEPTED ******************")
-            sents.append(sent)
+            accepted.append(sent.text)
         else:
-            log.debug("*********** DROPPED ******************")
-            dropped.append(sent)
-    return sents, dropped
+            dropped.append(sent.text)
+    return combine(accepted, dropped)
 
 
-def quant_filter(sents):
-    valid = []
+@task
+def quant_filter(sents, path=None):
+    sents = sents[sents.accepted].text
+    accepted = []
+    dropped = []
     for sent in sents:
         nlp1 = nlp(sent)
         labels = [ent.label_ for ent in nlp1.ents]
         if any(x in ["CARDINAL", "ORDINAL", "PERCENT", "MONEY"] for x in labels):
-            valid.append(sent)
-    return valid
+            accepted.append(sent)
+        else:
+            dropped.append(sent)
+    return combine(accepted, dropped)
 
 
-def get_topics(sents, topic2kw):
+@task
+def get_topics(sents, topic2kw, path=None):
     """ 
     generate topics for sentences using ngram matching
     :param sents: sentences
     :return: dataframe with sentence, topic1, topic2, keywords1, keywords2
     """
+    sents = sents[sents.accepted].text
     out = []
     for sent in sents:
         topics = dict()
