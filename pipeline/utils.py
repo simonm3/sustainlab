@@ -22,6 +22,7 @@ def decrypt_all():
         except:
             log.warning(f"cannot read {rep}")
 
+
 def decrypt(path):
     """decrypt pdf. pypdf2 cannot read encrypted even if no password
     NOTE: pikepdf does not work in prefect2
@@ -29,13 +30,14 @@ def decrypt(path):
     os.makedirs("working/decrypt", exist_ok=True)
     outpath = f"working/decrypt/{os.path.basename(path)}"
     if os.path.exists(outpath):
-        return
+        return outpath
     if not PyPDF2.PdfFileReader(path).is_encrypted:
-        return
+        return outpath
 
     # decrypt
     pikepdf.Pdf.open(path).save(outpath)
     return outpath
+
 
 def combine(accepted, dropped):
     df1 = pd.DataFrame(dict(text=accepted))
@@ -43,6 +45,7 @@ def combine(accepted, dropped):
     df2 = pd.DataFrame(dict(text=dropped))
     df2["accepted"] = False
     return pd.concat([df1, df2])
+
 
 def lemmatize(text):
     words = [w.lemma_ for w in nlp(text)]

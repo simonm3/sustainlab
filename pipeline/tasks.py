@@ -3,7 +3,7 @@ import re
 import pandas as pd
 from functools import partial
 from .utils import nlp, spaced, combine
-from prefectx.makefile import task
+from prefectx import task
 import PyPDF2
 
 import logging

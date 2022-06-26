@@ -21,9 +21,10 @@ log = logging.getLogger(__name__)
 # TODO what else could be useful in target fstring?
 FSTRING_MODULES = [os, datetime]
 
+
 def f(fstring, kwargs):
     """evaluate fstring at runtime including limited set of modules"""
-    modules = {module.__name__:module for module in FSTRING_MODULES}
+    modules = {module.__name__: module for module in FSTRING_MODULES}
     return eval(f"f'{fstring}'", modules, kwargs)
 
 
