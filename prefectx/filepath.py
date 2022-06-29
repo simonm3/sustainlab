@@ -43,7 +43,6 @@ class Filepath:
 
     def save(self, data):
         os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
-        log.info(f"saving {self.path}")
         pickle.dump(data, open(self.path, "wb"))
 
     def load(self):

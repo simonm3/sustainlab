@@ -10,6 +10,22 @@ import base64
 
 log = logging.getLogger(__name__)
 
+# TODO remove when dask bug fixed https://github.com/dask/distributed/issues/5971
+os.environ["ENV MALLOC_TRIM_THRESHOLD_"] = "65536"
+
+# set flag for prefect use
+prefect = True
+if "PREFECT_DISABLED" in os.environ:
+    log.warning(
+        "prefect is disabled as PREFECT_DISABLED environment variable exists"
+    )
+    prefect = False
+else:
+    try:
+        import prefect
+    except ModuleNotFoundError:
+        log.warning("prefect is disabled as not installed")
+        prefect = False
 
 # TODO remove when fixed. likely there should be a timeout setting somewhere.
 def keepalive():
@@ -29,32 +45,7 @@ def load_cache(filename):
     blob = res["blob"]
     return pickle.loads(base64.b64decode(blob))
 
-
-def _get_task():
-    """ use mock task if prefect disabled or not installed """
-    prefect = True
-    if "PREFECT_DISABLED" in os.environ:
-        log.warning(
-            "prefect is disabled as PREFECT_DISABLED environment variable exists"
-        )
-        prefect = False
-    else:
-        try:
-            from .makefile import task
-        except ModuleNotFoundError as e:
-            if e.name.startswith("prefect"):
-                log.warning("prefect is disabled as not installed")
-                prefect = False
-            else:
-                raise
-
-    # fake task decorator
-    if not prefect:
-
-        def task(fn=None, **kwargs):
-            return fn if fn else partial(task, **kwargs)
-
-    return task
-
-
-task = _get_task()
+if prefect:
+    from .makefile import task
+else:
+    from .filetask import filetask as task

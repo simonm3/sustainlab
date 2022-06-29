@@ -1,114 +1,162 @@
 import os
 import re
 import pandas as pd
-from functools import partial
-from .utils import nlp, spaced, combine
+from .utils import nlp, spaced, lemmatize
 from prefectx import task
 import PyPDF2
+import pikepdf
+import shutil
+from tqdm.auto import tqdm
 
 import logging
 
 log = logging.getLogger(__name__)
 
-task = partial(
-    task, target="working/{taskname}/{os.path.basename(os.path.splitext(path)[0])}"
-)
+task = task(target="working/{taskname}/{base}")
+
+
+@task(save=False, target="reports_decrypted/{os.path.basename(path)}")
+def decrypt(path):
+    """decrypt pdf. pypdf2 cannot read encrypted even if no password
+    """
+    outpath = f"reports_decrypted/{os.path.basename(path)}"
+    if PyPDF2.PdfFileReader(path).is_encrypted:
+        pikepdf.Pdf.open(path).save(outpath)
+    else:
+        shutil.move(path, outpath)
+
+    return outpath
 
 
 @task
 def pdf2text(path, pages=9999999):
     """return text from pdf"""
 
+    def save_src(src, base):
+        """ save source of text """
+        src = f"working/pdf2text_{src}"
+        os.makedirs(src, exist_ok=True)
+        with open(f"{src}/{base}", "w") as f:
+            f.write("")
+
     # try to extract text rather than image
     pdf = PyPDF2.PdfFileReader(path)
     pages = [p.extractText() for p in pdf.pages[:pages]]
     text = " ".join(pages)
-    basename = os.path.basename(path)
+    base = os.path.splitext(os.path.basename(path))[0]
 
     # extract pdf2text directly.
     if len(text) > 100:
-        log.info(f" {basename} text pdf")
-        return text
+        save_src("text", base)
+    else:
+        # use provided text
+        try:
+            with open(f"reports/{base}.txt") as f:
+                text = f.read()
+                log.info(f"{base} pytesseract text")
+                save_src("slab", base)
+        except:
+            log.info(f"{base} image pdf with no provided text")
+            save_src("notext", base)
 
-    # sustainlab provided text (from image=>pytesseract OCR)
-    base, ext = os.path.splitext(path)
-    try:
-        with open(f"{base}.txt") as f:
-            text = f.read()
-            log.info(f" {basename} pytesseract text")
-    except:
-        log.info(f" {basename} image pdf with no provided text")
     return text
 
 
 @task
-def row_filter(text, path=None):
-    # remove headers
-    dropped = []
+def row_filter(text):
     accepted = []
-    for r in text.split("\n"):
+    rows = text.split("\n")
+    for row in rows:
         if any(
             [
-                r.istitle(),
-                r.isupper(),
-                r.isspace(),
-                r.replace(",", "").isnumeric(),
-                r.find("....") >= 0,
+                row.istitle(),
+                row.isupper(),
+                row.isspace(),
+                row.replace(",", "").isnumeric(),
+                row.find("....") >= 0,
             ]
         ):
-            dropped.append(r)
+            accepted.append(False)
         else:
-            accepted.append(r)
-    return combine(accepted, dropped)
+            accepted.append(True)
+    return pd.DataFrame(dict(text=rows, accepted=accepted))
 
 
 @task
-def sentence_filter(rows, path=None):
-    """split into sentences and filter
-    rule based. nouns>=2 and (verbs+aux)>=1
-    """
+def sentence_filter(rows):
+    """keep proper sentences with numbers"""
     rows = rows[rows.accepted].text
     text = "\n".join(rows)
     # hyphenated words
     text = text.replace("-\n", "")
     # line endings
     text = text.replace("\n\n", ".\n").replace("\n", " ")
-    # multiple spaces
+    # multiple spaces, tabs and newlines
     text = re.sub("\s+", " ", text)
 
-    doc = nlp(text)
+    text = nlp(text)
 
     accepted = []
-    dropped = []
-    for sent in doc.sents:
+    for sent in tqdm(list(text.sents), desc="sentence_filter"):
         nouns = sum([token.pos_ in ["NOUN", "PROPN", "PRON"] for token in sent])
         verbs = sum([token.pos_ in ["AUX", "VERB"] for token in sent])
-        log.debug(sent.text)
-        log.debug((nouns, verbs))
-        if (nouns >= 2) and (verbs >= 1):
-            accepted.append(sent.text)
+        labels = [ent.label_ for ent in sent.ents]
+        if (
+            any(x in ["CARDINAL", "PERCENT", "MONEY"] for x in labels)
+            and (nouns >= 2)
+            and (verbs >= 1)
+        ):
+            accepted.append(True)
         else:
-            dropped.append(sent.text)
-    return combine(accepted, dropped)
+            accepted.append(False)
+    sents = [str(s) for s in text.sents]
+    return pd.DataFrame(dict(text=sents, accepted=accepted))
+
+
+@task(target="working/topic2kw")
+def topic2kw():
+    keywords = pd.read_excel("keywords.xlsx")
+
+    # get ngrams
+    keywords["ngrams"] = (
+        keywords.Unigrams.astype(str) + "," + keywords.Bigrams.astype(str)
+    )
+    keywords.ngrams = keywords.ngrams.apply(lambda x: x.split(","))
+    topic2kw = dict(zip(keywords.Subtopic, keywords.ngrams))
+
+    # adjustments
+    for k, v in topic2kw.items():
+        # correct spelling errors
+        out = [x.replace("_", " ").strip() for x in v]
+        spell = dict(abseteeism="absenteeism", laeble="label", _emissions="emissions")
+        out = [spell.get(x, x) for x in out]
+
+        # lemmatize
+        out = [lemmatize(x) for x in out]
+
+        # remove common words that have mixed meanings
+        out = [
+            x for x in out if x not in ["", "nan", "good", "material", "right", "cycle"]
+        ]
+
+        # remove duplicates
+        topic2kw[k] = sorted(list(set(out)))
+
+    # remove overlapping
+    for k, v in topic2kw.items():
+        newv = v.copy()
+        for v1 in v:
+            for v2 in v:
+                if (v1 != v2) and (spaced(v1) in spaced(v2)) and (v2 in newv):
+                    # log.info(f"removing {v2} due to {v1}")
+                    newv.remove(v2)
+        topic2kw[k] = newv
+
+    return topic2kw
 
 
 @task
-def quant_filter(sents, path=None):
-    sents = sents[sents.accepted].text
-    accepted = []
-    dropped = []
-    for sent in sents:
-        nlp1 = nlp(sent)
-        labels = [ent.label_ for ent in nlp1.ents]
-        if any(x in ["CARDINAL", "ORDINAL", "PERCENT", "MONEY"] for x in labels):
-            accepted.append(sent)
-        else:
-            dropped.append(sent)
-    return combine(accepted, dropped)
-
-
-@task
-def get_topics(sents, topic2kw, path=None):
+def get_topics(sents, topic2kw):
     """ 
     generate topics for sentences using ngram matching
     :param sents: sentences
@@ -131,4 +179,51 @@ def get_topics(sents, topic2kw, path=None):
         if len(topics) >= 2:
             res["topic2"], res["keywords2"] = list(topics.items())[1]
         out.append(res)
+        out.topic1 = out.topic1.fillna("outofscope")
     return pd.DataFrame(out)
+
+
+@task(target="working/esg")
+def esg(df):
+    from transformers import pipeline
+
+    classifier = pipeline(model="nbroad/ESG-BERT")
+    results = []
+    for sent in tqdm(df.sent.tolist()):
+        result = classifier(sent[:512])
+        results.append(result)
+    df["esg"] = [res[0]["label"] for res in results]
+    df["score"] = [res[0]["score"] for res in results]
+
+    df["esg2"] = df.esg
+    df.loc[(df.score < 0.5) & (df.ntopics == 0), "esg2"] = "outofscope"
+    df.topic1 = df.topic1.fillna("outofscope")
+
+    return df
+
+
+# TODO not working
+@task(target="working/esg_ray")
+def esg_ray(df):
+    raise NotImplementedError
+    from transformers import pipeline
+    import psutil
+    import ray
+
+    num_cpus = psutil.cpu_count(logical=True) - 1
+    ray.init(num_cpus=num_cpus, ignore_reinit_error=True)
+    classifier = pipeline(model="nbroad/ESG-BERT")
+    pipe_id = ray.put(classifier)
+
+    @ray.remote
+    def predict(pipe_id, sent):
+        return pipe_id(sent)
+
+    # bert only accepts 512
+    sents = [s[:512] for s in df.sent.tolist()]
+    results = ray.get([predict.remote(pipe_id, sent) for sent in sents])
+    df["esg"] = [res[0]["label"] for res in results]
+    df["score"] = [res[0]["score"] for res in results]
+
+    return df
+
