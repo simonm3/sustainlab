@@ -10,5 +10,7 @@
 			"path": "../../live_politics/registr/worker"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"makefile.extensionOutputFolder": "./.vscode"
+	}
 }

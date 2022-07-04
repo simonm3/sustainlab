@@ -12,13 +12,13 @@ import logging
 
 log = logging.getLogger(__name__)
 
-task = task(target="working/{taskname}/{base}")
+task = task(target="working/{taskname}/{base}", name="{taskname}_{base[:8]}")
+roottask = task(target="working/{taskname}", name="{taskname}")
 
 
-@task(save=False, target="reports_decrypted/{os.path.basename(path)}")
+@task(store=None, target="reports_decrypted/{os.path.basename(path)}")
 def decrypt(path):
-    """decrypt pdf. pypdf2 cannot read encrypted even if no password
-    """
+    """decrypt pdf. pypdf2 cannot read encrypted even if no password"""
     outpath = f"reports_decrypted/{os.path.basename(path)}"
     if PyPDF2.PdfFileReader(path).is_encrypted:
         pikepdf.Pdf.open(path).save(outpath)
@@ -33,7 +33,7 @@ def pdf2text(path, pages=9999999):
     """return text from pdf"""
 
     def save_src(src, base):
-        """ save source of text """
+        """save source of text"""
         src = f"working/pdf2text_{src}"
         os.makedirs(src, exist_ok=True)
         with open(f"{src}/{base}", "w") as f:
@@ -113,7 +113,36 @@ def sentence_filter(rows):
     return pd.DataFrame(dict(text=sents, accepted=accepted))
 
 
-@task(target="working/topic2kw")
+@task
+def get_topics(sents, topic2kw):
+    """
+    generate topics for sentences using ngram matching
+    :param sents: sentences
+    :return: dataframe with sentence, topic1, topic2, keywords1, keywords2
+    """
+    sents = sents[sents.accepted].text
+    out = []
+    for sent in sents:
+        topics = dict()
+        for k, v in topic2kw.items():
+            s = " | ".join(v)
+            s = spaced(s)
+            ngrams = [x.strip() for x in re.findall(s, sent)]
+            if len(ngrams) > 0:
+                topics[k] = ngrams
+        topics = dict(sorted(topics.items(), key=lambda x: len(x[1]), reverse=True))
+        res = dict(sent=sent, ntopics=len(topics))
+        if len(topics) >= 1:
+            res["topic1"], res["keywords1"] = list(topics.items())[0]
+        if len(topics) >= 2:
+            res["topic2"], res["keywords2"] = list(topics.items())[1]
+        out.append(res)
+    out = pd.DataFrame(out)
+    out.topic1 = out.topic1.fillna("outofscope")
+    return out
+
+
+@roottask
 def topic2kw():
     keywords = pd.read_excel("keywords.xlsx")
 
@@ -155,41 +184,14 @@ def topic2kw():
     return topic2kw
 
 
-@task
-def get_topics(sents, topic2kw):
-    """ 
-    generate topics for sentences using ngram matching
-    :param sents: sentences
-    :return: dataframe with sentence, topic1, topic2, keywords1, keywords2
-    """
-    sents = sents[sents.accepted].text
-    out = []
-    for sent in sents:
-        topics = dict()
-        for k, v in topic2kw.items():
-            s = " | ".join(v)
-            s = spaced(s)
-            ngrams = [x.strip() for x in re.findall(s, sent)]
-            if len(ngrams) > 0:
-                topics[k] = ngrams
-        topics = dict(sorted(topics.items(), key=lambda x: len(x[1]), reverse=True))
-        res = dict(sent=sent, ntopics=len(topics))
-        if len(topics) >= 1:
-            res["topic1"], res["keywords1"] = list(topics.items())[0]
-        if len(topics) >= 2:
-            res["topic2"], res["keywords2"] = list(topics.items())[1]
-        out.append(res)
-        out.topic1 = out.topic1.fillna("outofscope")
-    return pd.DataFrame(out)
-
-
-@task(target="working/esg")
+@roottask
 def esg(df):
     from transformers import pipeline
 
     classifier = pipeline(model="nbroad/ESG-BERT")
     results = []
     for sent in tqdm(df.sent.tolist()):
+        # truncate as bert has 512 token limit
         result = classifier(sent[:512])
         results.append(result)
     df["esg"] = [res[0]["label"] for res in results]
@@ -199,11 +201,14 @@ def esg(df):
     df.loc[(df.score < 0.5) & (df.ntopics == 0), "esg2"] = "outofscope"
     df.topic1 = df.topic1.fillna("outofscope")
 
+    # if running on colab then save to parquet as pickle is pandas version specific
+    # df.to_parquet("working/esg.parquet")
+
     return df
 
 
 # TODO not working
-@task(target="working/esg_ray")
+@roottask
 def esg_ray(df):
     raise NotImplementedError
     from transformers import pipeline
@@ -226,4 +231,3 @@ def esg_ray(df):
     df["score"] = [res[0]["score"] for res in results]
 
     return df
-

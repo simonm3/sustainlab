@@ -19,15 +19,15 @@ formatters:
         datefmt: "%H:%M"
 
     standard:
-        format: "%(asctime)s | %(levelname)-7s | %(name)s - %(message)s [%(module)s/%(lineno)s]"
+        format: "%(asctime)s | %(levelname)-7s %(name)s | %(message)s [%(module)s/%(lineno)s]"
         datefmt: "%H:%M"
 
     flow_runs:
-        format: "%(asctime)s | %(levelname)-7s | Flow run %(flow_run_name)r - %(message)s"
+        format: "%(asctime)s | %(levelname)-7s Flow run | %(flow_run_name)r - %(message)s"
         datefmt: "%H:%M"
 
     task_runs:
-        format: "%(asctime)s | %(levelname)-7s | Task run %(task_run_name)r - %(message)s"
+        format: "%(asctime)s | %(levelname)-7s Task run | %(task_run_name)r - %(message)s"
         datefmt: "%H:%M"
 
     json:
@@ -71,7 +71,7 @@ loggers:
         propagate: no
 
     prefect.extra:
-        level: "${PREFECT_LOGGING_LEVEL}"
+        level: INFO
         handlers: [orion, console]
         propagate: no
 
@@ -97,6 +97,7 @@ loggers:
         level: "${PREFECT_LOGGING_SERVER_LEVEL}"
         handlers: [console]
         propagate: no
+    
 
 # The root logger: any logger without propagation disabled sends to here as well
 root:
