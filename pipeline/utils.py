@@ -1,7 +1,4 @@
 import logging
-import pickle
-
-import pandas as pd
 import spacy
 
 log = logging.getLogger(__name__)

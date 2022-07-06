@@ -1,11 +1,25 @@
 import os
-
-PREFECTX = os.path.abspath(os.path.join(__file__, os.pardir, os.pardir, "prefectx"))
+from prefect.client import get_client
 
 # extra_loggers logs to orion
-os.environ.update(
-    PREFECT_ORION_DATABASE_CONNECTION_TIMEOUT="60.0",
-    PREFECT_LOGGING_SETTINGS_PATH=f"{PREFECTX}/logging.yml",
-    PREFECT_LOGGING_EXTRA_LOGGERS="pipeline",
-    PREFECT_API_URL="http://127.0.0.1:4200/api",
-)
+os.environ.update(PREFECT_LOGGING_EXTRA_LOGGERS="pipeline")
+
+
+async def limits():
+    try:
+        async with get_client() as client:
+            res = await client.delete_concurrency_limit_by_tag("sentence")
+    except:
+        pass
+    async with get_client() as client:
+        limit_id = await client.create_concurrency_limit(
+            tag="sentence", concurrency_limit=1
+        )
+    async with get_client() as client:
+        res = await client.read_concurrency_limits(100, 0)
+    return await res
+
+
+if __name__ == "__main__":
+    res = limits()
+    print(res)

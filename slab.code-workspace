@@ -4,10 +4,10 @@
 			"path": "."
 		},
 		{
-			"path": "../../live_politics/registr/orion"
+			"path": "../prefectx"
 		},
 		{
-			"path": "../../live_politics/registr/worker"
+			"path": "../orion"
 		}
 	],
 	"settings": {
