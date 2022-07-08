@@ -38,13 +38,13 @@ class Document:
         df.index.name = "sent"
         return df
 
-    def compare_ngrams(self, i, target, ngram_limit=999):
+    def compare_ngrams(self, i, kpis, ngram_limit=999):
         """
-        compare a single sentence against ngrams
+        compare ngrams in a sentence against kpis
         :param i: index in sents
-        :param target: another document
+        :param kpis: another document
         :param ngram_limit: e.g. 4 => up to 4grams
-        :return: ngram_best, kpi_best, score_best, df (for checking ngrams for a sentence)
+        :return: best ngram, kpi, score; ngramdf (ngram * target sentence * score)
         """
         sent = self.sents[i]
         tokens = self.pipe.tokenizer.encode(sent)
@@ -56,23 +56,23 @@ class Document:
         ngrams = [self.pipe.tokenizer.decode(tokens[x:y]) for x, y in ngram_indexes]
 
         # compare ngram features to target sentence features
-        res = cosine_similarity(ngram_feats, target.sent_feats)
+        res = cosine_similarity(ngram_feats, kpis.sent_feats)
 
         # best match ngram text, kpi text, score
         ix = np.unravel_index(res.argmax(), res.shape)
-        ngram_best, kpi_best = ngrams[ix[0]], target.sents[ix[1]]
-        score_best = res.max()
+        ngram, kpi = ngrams[ix[0]], kpis.sents[ix[1]]
+        score = res.max()
 
         # only used for checking results of sentence
-        ngramdf = self.get_ngramdf(res, ngrams, target)
+        ngramdf = self.get_ngramdf(res, ngrams, kpis)
 
-        return ngram_best, kpi_best, score_best, ngramdf
+        return ngram, kpi, score, ngramdf
 
-    def get_ngramdf(self, res, ngrams, target):
+    def get_ngramdf(self, res, ngrams, kpis):
         """get dataframe of all matches for debugging"""
 
         # create dataframe
-        df = pd.DataFrame(res, index=ngrams, columns=target.sents)
+        df = pd.DataFrame(res, index=ngrams, columns=kpis.sents)
         df = df.melt(ignore_index=False)
 
         # sort and filter
