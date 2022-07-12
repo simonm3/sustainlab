@@ -3,6 +3,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 from tqdm.auto import tqdm
 from itertools import product
 import pandas as pd
+from transformers import pipeline
+
 import logging
 
 log = logging.getLogger(__name__)
@@ -21,12 +23,24 @@ def get_ngram_indexes(slen, ngram=999):
 
 
 class Document:
-    def __init__(self, sents, pipe):
+    pipe = pipeline(
+        "feature-extraction",
+        model="nbroad/ESG-BERT",
+        padding=True,
+        truncation=True,
+        max_length=512,
+    )
+
+    def __init__(self, sents):
+        """
+        :param sents: list of sentences"""
         self.sents = sents
-        self.pipe = pipe
 
     def get_feats(self):
-        self.token_feats = [np.array(self.pipe(s)).squeeze() for s in tqdm(self.sents)]
+        self.token_feats = [
+            np.array(self.pipe(s)).squeeze()
+            for s in tqdm(self.sents, desc="token_features")
+        ]
         self.sent_feats = [x.mean(axis=0) for x in self.token_feats]
 
     def compare_sents(self, target):
