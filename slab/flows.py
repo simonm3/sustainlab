@@ -1,27 +1,17 @@
 from glob import glob
-import numpy as np
 
-from prefectx import flow
 from prefect import tags
 from prefect.client import get_client
 from prefect.task_runners import (
+    ConcurrentTaskRunner,
     DaskTaskRunner,
     SequentialTaskRunner,
-    ConcurrentTaskRunner,
 )
-import dask
-from prefectx import gcontext
 
-from .preptasks import *
-from .models import *
-
-"""
-TODO 
-spacy tasks use a lot of RAM which prevents use of multiprocessing on single machine
-    research dask n_workers, n_threads and limiting RAM usage with concurrency limits
-    try kubernetes or other way to run on multiple servers
-    research why concurrent much slower than sequential
-"""
+from . import Store, flow, gcontext
+from .doctasks import *
+from .roottasks import *
+from .pdftasks import *
 
 # runner = DaskTaskRunner(cluster_kwargs=dict(n_workers=1, resources=dict(process=4)))
 # runner = ConcurrentTaskRunner()
@@ -38,7 +28,7 @@ async def setlimits(tag, limit=1):
 
 
 @flow(task_runner=runner)
-def add_filters(files, prefix=""):
+def preprocess(files, prefix=""):
     """splits files into sentences and adds filters
 
     set prefix="sl/" to use sustainlab text instead of pypdf2
@@ -67,38 +57,72 @@ def create_features(files=None, sample=1000):
     df = pd.concat(dfs)
     df = df.rename(columns=dict(text="sent"))
 
-    # filter
+    # filter1 = sample, numbers, sentence structure
     log.info(f"{len(df)} sentences")
     df = df.sample(sample)
     log.info(f"{len(df)} sample sentences")
     df = df[df.accepted]
     log.info(f"{len(df)} accepted with number, verb, 2*nouns")
 
+    ##################################################
+
     # kw and topic
-    topic2kw = pd.read_pickle("working/topic2kw")
-    kwtopics_ = kwtopics(df, topic2kw)
-    esg_ = esg(kwtopics_)
-    esg_.wait()
+    kwtopics_ = kwtopics(df.sent, topic2kw())
+    esg_ = esg(df.sent)
 
     # aggregate kw/esg
     items = [kwtopics_, esg_]
-    items = [i.result().load().set_index("sent") for i in items]
-    df = pd.concat(items, axis=1).reset_index()
-
-    # filter inscope
-    df = df[df.esg != "outofscope"]
-    log.info(f"{len(df)} inscope")
-    df.to_pickle("inscope")
-
-    # embedddings
-    embeddings_ = embeddings(df)
-    # TODO ner(df)
-
-    # aggregate
-    embeddings_.wait()
-    items = [kwtopics_, esg_, embeddings_]
-    items = [i.result().load().set_index("sent") for i in items]
+    items = [i.result().load() for i in items]
     df = pd.concat(items, axis=1)
-    # TODO df = df.add_ensemble()
+    df.loc[(df.esg_score < 0.5) & (df.ntopics == 0), "esg_topic"] = "outofscope"
 
-    df.to_excel("output/agg.xlsx")
+    # filter2 = inscope keyword matches and score threshold
+    df = df[df.esg_topic != "outofscope"]
+    log.info(f"{len(df)} inscope")
+    df.to_pickle("working/inscope")
+
+    #######################################################
+
+    # sentence embeddings
+    gcontext["docname"] = "sents"
+    token_feats_ = token_feats(df.index)
+    sent_feats_ = sent_feats(token_feats_)
+
+    # kpi embeddings
+    kpis = pd.read_excel(
+        "SustainLab_Generic_Granular_KPI list.xlsx", sheet_name="Granular KPI list"
+    )
+    kpis = kpis.KPI.tolist()
+    gcontext["docname"] = "kpis"
+    kpi_token_feats_ = token_feats(kpis)
+    kpi_feats_ = sent_feats(kpi_token_feats_)
+
+    # best kpi embeddings based on sent and ngrams
+    compare_sents_ = compare_sents(sent_feats_, kpi_feats_, df.index, kpis)
+    compare_ngrams_ = compare_ngrams(token_feats_, kpi_feats_, df.index, kpis)
+
+    # NER duckling
+    ducks_ = ducks(df.index)
+
+    # aggregate results
+    out = [x.result() for x in [compare_sents_, compare_ngrams_, ducks_]]
+    out = [x.load() if isinstance(x, Store) else x for x in out]
+    df = pd.concat([df, *out], axis=1)
+    df = df[
+        [
+            "kpi_ngram",
+            "kpi_sent",
+            "kw_topic1",
+            "esg_topic",
+            "ducks",
+            "ngram",
+            "ntopics",
+            "keywords1",
+            "score_sent",
+            "score_ngram",
+            "esg_score",
+        ]
+    ]
+    df.to_excel("output/out.xlsx")
+
+    return df
