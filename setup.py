@@ -9,10 +9,10 @@ from setuptools import setup
 params = dict(
     name='slab',
     description='slab',
-    version='1.0.0',
+    version='2.0.0',
     url='https://dagshub.com/Omdena/SustainLab.git',
-    install_requires=['PyPDF2', 'pandas', 'prefect', 'transformers', 'tqdm',
-                      'pikepdf', 'Requests', 'spacy', 'numpy', 'scikit_learn', 'dask'],
+    install_requires=['Requests', 'pandas', 'numpy', 'dask', 'scikit_learn',
+                      'spacy', 'PyPDF2', 'tqdm', 'transformers', 'prefect', 'pikepdf'],
     packages=['slab'],
     package_data={},
     include_package_data=True,
