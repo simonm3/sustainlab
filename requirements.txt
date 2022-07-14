@@ -1,0 +1,11 @@
+transformers==4.20.0
+prefect==2.0b7
+Requests==2.27.1
+tqdm==4.64.0
+PyPDF2==2.2.1
+pikepdf==5.1.5
+scikit_learn==1.0.2
+numpy==1.21.5
+spacy==3.3.1
+pandas==1.4.3
+dask==2022.6.1

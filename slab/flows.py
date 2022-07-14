@@ -7,6 +7,7 @@ from prefect.task_runners import (
     DaskTaskRunner,
     SequentialTaskRunner,
 )
+import dask
 
 from . import Store, flow, gcontext
 from .doctasks import *
@@ -14,6 +15,7 @@ from .roottasks import *
 from .pdftasks import *
 from . import utils
 
+dask.config.set({"distributed.comm.timeouts.connect": 600})
 # runner = DaskTaskRunner(cluster_kwargs=dict(n_workers=1, resources=dict(process=4)))
 # runner = ConcurrentTaskRunner()
 
