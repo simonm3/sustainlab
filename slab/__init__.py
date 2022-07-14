@@ -1,5 +1,8 @@
 import os
 from datetime import timedelta
+import logging
+
+log = logging.getLogger()
 
 os.environ["PREFECT_LOGGING_EXTRA_LOGGERS"] = "slab"
 # os.environ["PREFECT_API_URL"] = "http://127.0.0.1:4200/api"
@@ -38,4 +41,4 @@ else:
     decrypttask = task(store=None, target="reports_decrypted/{os.path.basename(path)}")
     pdftask = task(target="working/{funcname}/{base}", name="{funcname}_{base[:8]}")
     roottask = task(target="working/{funcname}", name="{funcname}")
-    doctask = task(target="{docname}_{funcname}", name="{funcname}")
+    doctask = task(target="working/{docname}_{funcname}", name="{funcname}")

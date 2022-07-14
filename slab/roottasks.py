@@ -14,8 +14,18 @@ log = logging.getLogger(__name__)
 
 
 @task
+def inscope(kwtopics, esg):
+    """select inscope based on kwtopic and esg"""
+    df = pd.concat([kwtopics, esg], axis=1)
+    df.loc[(df.esg_score < 0.5) & (df.ntopics == 0), "esg_topic"] = "outofscope"
+    df = df[df.esg_topic != "outofscope"]
+    log.info(f"{len(df)} inscope")
+
+    return df
+
+
+@task
 def topic2kw():
-    log.info("start")
     keywords = pd.read_excel("keywords.xlsx")
 
     # get ngrams
@@ -24,7 +34,6 @@ def topic2kw():
     )
     keywords.ngrams = keywords.ngrams.apply(lambda x: x.split(","))
     topic2kw = dict(zip(keywords.Subtopic, keywords.ngrams))
-    log.info("got ngrams")
 
     # adjustments
     for k, v in topic2kw.items():
@@ -43,7 +52,6 @@ def topic2kw():
 
         # remove duplicates
         topic2kw[k] = sorted(list(set(out)))
-    log.info("done adjustments")
 
     # remove overlapping
     for k, v in topic2kw.items():
@@ -54,7 +62,6 @@ def topic2kw():
                     # log.info(f"removing {v2} due to {v1}")
                     newv.remove(v2)
         topic2kw[k] = newv
-    log.info("finishing")
 
     return topic2kw
 
@@ -62,7 +69,7 @@ def topic2kw():
 @task
 def kwtopics(sents, topic2kw):
     """
-    generate topics for sentences using ngram matching
+    generate topics for sentences using keywords matching
     :param sents: collection of sentences
     :return: dataframe with sentence, kw_topic1, topic2, keywords1, keywords2
     """
@@ -90,11 +97,14 @@ def kwtopics(sents, topic2kw):
 
 @task
 def esg(sents):
-    classifier = pipeline(model="nbroad/ESG-BERT")
+    classifier = pipeline(
+        model="nbroad/ESG-BERT",
+        truncation=True,
+        max_length=512,
+    )
     results = []
     for sent in tqdm(sents, desc="esg"):
-        # truncate as bert has 512 token limit
-        result = classifier(sent[:512])
+        result = classifier(sent)
         results.append(result)
 
     df = pd.DataFrame(index=sents)
@@ -105,36 +115,35 @@ def esg(sents):
 
 
 @task
-def compare_sents(sent_feats, kpi_feats, sents, kpis):
-    """add best kpi and score to sents"""
-    res = cosine_similarity(sent_feats, kpi_feats)
-    kpi = [kpis[x] for x in res.argmax(axis=1)]
-    score = res.max(axis=1)
-    log.info((len(kpi), len(score), len(sents)))
-    return pd.DataFrame(dict(kpi_sent=kpi, score_sent=score), index=sents)
+def compare_sents(df1, df2):
+    """add best df2 and score to sents"""
+    res = cosine_similarity(df1.sent_feats.tolist(), df2.sent_feats.tolist())
+    df1["kpi_sent"] = [df2.index[x] for x in res.argmax(axis=1)]
+    df1["score_sent"] = res.max(axis=1)
+    return df1[["kpi_sent", "score_sent"]]
 
 
 @task
-def compare_ngrams(sent_token_feats, kpi_feats, sents, kpis):
+def compare_ngrams(df1, df2):
     # ngrams embedding
     res = []
-    zipped = zip(sent_token_feats, sents)
-    for sent_token_feats, sent in tqdm(zipped, total=len(sents), desc="compare ngrams"):
-        ngram, kpi, score, _ = compare_ngrams_s(sent_token_feats, kpi_feats, sent, kpis)
+    for sent, row in tqdm(df1.iterrows(), total=len(df1), desc="compare ngrams"):
+        ngram, kpi, score, _ = compare_ngrams_s(
+            row.token_feats, df2.sent_feats.tolist(), sent, df2.index
+        )
         res.append([ngram, kpi, score])
     ngramdf = pd.DataFrame(
-        res, columns=["ngram", "kpi_ngram", "score_ngram"], index=sents
+        res, columns=["ngram", "kpi_ngram", "score_ngram"], index=df1.index
     )
 
     return ngramdf
 
 
 @task
-def ducks(sents):
+def ducks(df):
     """duckling NER"""
-    ducks = [duck(x) for x in sents]
-    ducks = pd.DataFrame(dict(ducks=ducks), index=sents)
-    return ducks
+    df["ducks"] = [duck(x) for x in df.index]
+    return df[["ducks"]]
 
 
 def compare_ngrams_s(token_feats, kpi_feats, sent, kpis, ngram_limit=5):
