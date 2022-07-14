@@ -116,7 +116,7 @@ def esg(sents):
 
 @task
 def compare_sents(df1, df2):
-    """add best df2 and score to sents"""
+    """return best sentence embedding"""
     res = cosine_similarity(df1.sent_feats.tolist(), df2.sent_feats.tolist())
     df1["kpi_sent"] = [df2.index[x] for x in res.argmax(axis=1)]
     df1["score_sent"] = res.max(axis=1)
@@ -125,7 +125,7 @@ def compare_sents(df1, df2):
 
 @task
 def compare_ngrams(df1, df2):
-    # ngrams embedding
+    """return best ngram embedding"""
     res = []
     for sent, row in tqdm(df1.iterrows(), total=len(df1), desc="compare ngrams"):
         ngram, kpi, score, _ = compare_ngrams_s(
