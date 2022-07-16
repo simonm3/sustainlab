@@ -81,5 +81,6 @@ def create_features(sent_path, kpi_path, kpis, sample=1000):
 
     # best kpi embeddings based on sent and ngrams
     gcontext.path = "_".join([sent_path, kpi_path])
+    gcontext.path = f"working/{gcontext.path}"
     compare_sents_ = compare_sents(sent_feats_, kpi_feats_)
     compare_ngrams_ = compare_ngrams(token_feats_, kpi_feats_)
