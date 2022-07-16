@@ -1,5 +1,4 @@
-from glob import glob
-
+import dask
 from prefect import tags
 from prefect.client import get_client
 from prefect.task_runners import (
@@ -7,13 +6,11 @@ from prefect.task_runners import (
     DaskTaskRunner,
     SequentialTaskRunner,
 )
-import dask
 
-from . import Store, flow, gcontext
-from .doctasks import *
-from .roottasks import *
-from .pdftasks import *
+from . import flow, gcontext
 from . import utils
+from .pdftasks import *
+from .roottasks import *
 
 dask.config.set({"distributed.comm.timeouts.connect": 600})
 # runner = DaskTaskRunner(cluster_kwargs=dict(n_workers=1, resources=dict(process=4)))
@@ -47,18 +44,16 @@ def preprocess(files):
 
 
 @flow(task_runner=runner)
-def create_features(sample=1000):
+def create_features(sent_path, kpi_path, kpis, sample=1000):
     """
-    each feature is df of sentences so can be rerun separately
-    :param sample: sample size for testing
+    :param sents_path: path to sentences
+    :param sample: number pre-filter sentences. post-filter will be approx 1/4 of that.
     """
-    # select data.
-    # TODO pass path parameters
-    files = glob("working/sentence_filter/*")
-    df = utils.filtered(files)
-    kpis = pd.read_excel(
-        "SustainLab_Generic_Granular_KPI list.xlsx", sheet_name="Granular KPI list"
-    ).set_index("KPI")
+    gcontext.path = f"working/{sent_path}"
+
+    # filter and sample
+    np.random.seed(0)
+    df = utils.filtered(f"{gcontext.path}/sentence_filter/*", sample)
 
     # keyword and esg models
     kwtopics_ = kwtopics(df.sent, topic2kw())
@@ -68,18 +63,23 @@ def create_features(sample=1000):
     inscope_ = inscope(kwtopics_, esg_)
 
     # sentence embeddings
-    gcontext["docname"] = "sents"
     token_feats_ = token_feats(inscope_)
     sent_feats_ = sent_feats(token_feats_)
 
+    # NER duckling
+    ducks_ = ducks(inscope_)
+
+    ###########################################
+
     # kpi embeddings
-    gcontext["docname"] = "kpis"
+    kpis = pd.DataFrame(index=kpis)
+    gcontext.path = f"working/{kpi_path}"
     kpi_token_feats_ = token_feats(kpis)
     kpi_feats_ = sent_feats(kpi_token_feats_)
 
+    ###########################################
+
     # best kpi embeddings based on sent and ngrams
+    gcontext.path = "_".join([sent_path, kpi_path])
     compare_sents_ = compare_sents(sent_feats_, kpi_feats_)
     compare_ngrams_ = compare_ngrams(token_feats_, kpi_feats_)
-
-    # NER duckling
-    ducks_ = ducks(inscope_)

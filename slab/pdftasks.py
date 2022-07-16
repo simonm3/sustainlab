@@ -6,16 +6,21 @@ import shutil
 import pandas as pd
 import pikepdf
 import PyPDF2
-from prefectx import task
 from tqdm.auto import tqdm
 
-from . import decrypttask as task
+from . import task
 from .utils import nlp
 
 log = logging.getLogger(__name__)
 
+task = task(target="{path}/{funcname}/{base}", name_template="{funcname}_{base[:8]}")
 
-@task
+
+@task(
+    store=None,
+    target="reports_decrypted/{os.path.basename(path)}",
+    name_template="{funcname}",
+)
 def decrypt(path):
     """decrypt pdf. pypdf2 cannot read encrypted even if no password"""
     outpath = f"reports_decrypted/{os.path.basename(path)}"
@@ -25,9 +30,6 @@ def decrypt(path):
         shutil.move(path, outpath)
 
     return outpath
-
-
-from . import pdftask as task
 
 
 @task

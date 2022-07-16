@@ -4,10 +4,7 @@
 			"path": "."
 		},
 		{
-			"path": "../prefectx"
-		},
-		{
-			"path": "../orion"
+			"path": "../pipex"
 		}
 	],
 	"settings": {

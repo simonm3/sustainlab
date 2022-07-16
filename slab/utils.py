@@ -1,5 +1,6 @@
 import logging
 from itertools import product
+from glob import glob
 
 import requests
 import spacy
@@ -39,7 +40,8 @@ def get_ngram_indexes(slen, ngram=999):
     return ngram_indexes
 
 
-def filtered(files, sample=1000):
+def filtered(sents_path, sample=1000):
+    files = glob(sents_path)
     # aggregate sentences
     log.info(f"{len(files)} pdfs")
     dfs = [pd.read_pickle(f) for f in files]
@@ -55,12 +57,13 @@ def filtered(files, sample=1000):
     return df
 
 
-def aggregate():
+def aggregate(sents_path, kpis_path):
     """aggregate results"""
-    out = [
-        pd.read_pickle(f"working/{x}")
-        for x in ["inscope", "compare_sents", "compare_ngrams", "ducks"]
+    out = [f"working/{sents_path}/{x}" for x in ["inscope", "ducks"]] + [
+        f"working/{sents_path}_{kpis_path}/{x}"
+        for x in ["compare_sents", "compare_ngrams"]
     ]
+    out = [pd.read_pickle(x) for x in out]
     df = pd.concat(out, axis=1)
     df = df[
         [
