@@ -1,11 +1,11 @@
 import dask
 from prefect import tags
 from prefect.client import get_client
-from prefect.task_runners import (
-    ConcurrentTaskRunner,
-    DaskTaskRunner,
-    SequentialTaskRunner,
-)
+
+# from prefect_dask.task_runners import DaskTaskRunner
+# from prefect_ray.task_runners import RayTaskRunner
+
+from prefect.task_runners import SequentialTaskRunner, ConcurrentTaskRunner
 
 from . import flow, gcontext
 from . import utils
@@ -13,11 +13,11 @@ from .pdftasks import *
 from .roottasks import *
 
 dask.config.set({"distributed.comm.timeouts.connect": 600})
-# runner = DaskTaskRunner(cluster_kwargs=dict(n_workers=1, resources=dict(process=4)))
-# runner = ConcurrentTaskRunner()
 
 # small scale tests faster without multiprocessing
 runner = SequentialTaskRunner()
+# runner = DaskTaskRunner(cluster_kwargs=dict(n_workers=1, resources=dict(process=4)))
+# runner = ConcurrentTaskRunner()
 
 # TODO simpler way
 async def setlimits(tag, limit=1):
@@ -33,8 +33,12 @@ def preprocess(files):
     :param files: pdf files
     """
     # sentence uses a lot of RAM so run on own
-    if isinstance(runner, DaskTaskRunner):
-        setlimits("sentence", 1)
+    try:
+        if isinstance(runner, DaskTaskRunner):
+            setlimits("sentence", 1)
+    except:
+        log.exception("error setting dask limits")
+
     for path in files:
         gcontext["base"] = os.path.basename(os.path.splitext(path)[0])
         text = pdf2text(path)

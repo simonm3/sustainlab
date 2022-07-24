@@ -8,12 +8,16 @@ import pandas as pd
 
 log = logging.getLogger(__name__)
 
-nlp = spacy.load("en_core_web_sm")
+# only need tagger and lemmatizer
+nlp = spacy.load(
+    "en_core_web_sm", disable=["tok2vec", "parser", "senter", "attribute_ruler", "ner"]
+)
 nlp.max_length = int(2e6)
 
 
 def lemmatize(text):
-    words = [w.lemma_ for w in nlp(text)]
+    words = list(nlp.pipe([text], n_process=1))[0]
+    words = [w.lemma_ for w in words]
     # add space at start and end to match ngrams
     words = " ".join(words).replace(" - ", "-")
     return words

@@ -5,6 +5,12 @@
 		},
 		{
 			"path": "../pipex"
+		},
+		{
+			"path": "../orion"
+		},
+		{
+			"path": "../../../../../anaconda3/Lib/site-packages/prefect/orion"
 		}
 	],
 	"settings": {

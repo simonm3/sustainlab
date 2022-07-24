@@ -1,8 +1,6 @@
 import logging
 import os
 
-from transformers import logging as tlogging
-
 log = logging.getLogger()
 
 os.environ["PREFECT_LOGGING_EXTRA_LOGGERS"] = os.path.basename(
@@ -15,12 +13,14 @@ os.environ["TOKENIZERS_PARALLELISM"] = "False"
 os.environ["OMP_NUM_THREADS"] = "1"
 
 # avoid warning message re unused weights
+from transformers import logging as tlogging
+
 tlogging.set_verbosity_error()
 
 from pipex import task, flow, gcontext
 
 # note still uses pipex to ignore any kwargs not used by prefect
-if os.environ["PIPEX"] == "prefect":
+if os.environ.get("PIPEX") == "prefect":
     from datetime import timedelta
     from functools import partial
     from prefect.tasks import task_input_hash
