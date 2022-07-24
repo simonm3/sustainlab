@@ -58,7 +58,7 @@ def filtered(sents_path, sample=1000):
     log.info(f"{len(df)} sample sentences")
     df = df[df.accepted]
     log.info(f"{len(df)} accepted with number, verb, 2*nouns")
-    return df
+    return df.sent
 
 
 def aggregate(sents_path, kpis_path):

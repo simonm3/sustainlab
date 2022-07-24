@@ -21,16 +21,6 @@ pipe = pipeline(
 
 task = task(target="{path}/{funcname}", name_template="{funcname}")
 
-@task
-def inscope(kwtopics, esg):
-    """select inscope based on kwtopic and esg"""
-    df = pd.concat([kwtopics, esg], axis=1)
-    df.loc[(df.esg_score < 0.5) & (df.ntopics == 0), "esg_topic"] = "outofscope"
-    df = df[df.esg_topic != "outofscope"]
-    log.info(f"{len(df)} inscope")
-
-    return df
-
 
 @task
 def topic2kw():
@@ -121,52 +111,65 @@ def esg(sents):
 
     return df
 
+
 @task
-def token_feats(df):
-    df["token_feats"] = [
-        np.array(pipe(s)).squeeze() for s in tqdm(df.index, desc="token_features")
+def inscope(kwtopics, esg):
+    """select inscope based on kwtopic and esg"""
+    df = pd.concat([kwtopics, esg], axis=1)
+    df.loc[(df.esg_score < 0.5) & (df.ntopics == 0), "esg_topic"] = "outofscope"
+    df = df[df.esg_topic != "outofscope"]
+    log.info(f"{len(df)} inscope")
+
+    return df
+
+
+@task
+def token_feats(sents):
+    token_feats = [
+        np.array(pipe(s)).squeeze() for s in tqdm(sents, desc="token_features")
     ]
-    return df[["token_feats"]]
+    return token_feats
 
 
 @task
-def sent_feats(df):
-    df["sent_feats"] = [
-        x.mean(axis=0) for x in tqdm(df.token_feats, desc="sent_features")
-    ]
-    return df[["sent_feats"]]
+def sent_feats(token_feats):
+    sent_feats = [x.mean(axis=0) for x in tqdm(token_feats, desc="sent_features")]
+    return sent_feats
 
 
 @task
-def compare_sents(df1, df2):
+def compare_sents(sent_feats, kpi_feats, kpis):
     """return best sentence embedding"""
-    res = cosine_similarity(df1.sent_feats.tolist(), df2.sent_feats.tolist())
-    df1["kpi_sent"] = [df2.index[x] for x in res.argmax(axis=1)]
-    df1["score_sent"] = res.max(axis=1)
-    return df1[["kpi_sent", "score_sent"]]
+    res = cosine_similarity(sent_feats, kpi_feats)
+    df = pd.DataFrame()
+    df["kpi_sent"] = [kpis[x] for x in res.argmax(axis=1)]
+    df["score_sent"] = res.max(axis=1)
+    return df
 
 
 @task
-def compare_ngrams(df1, df2):
-    """return best ngram embedding"""
+def compare_ngrams(token_feats, kpi_feats, sents, kpis):
+    """return best ngram embedding
+    :param token_feats: iterable of token features
+    :param kpi_feats: iterable of kpi festures
+    :param sents: to get text of ngrams
+    :param kpis: to get text of best kpi
+    """
     res = []
-    for sent, row in tqdm(df1.iterrows(), total=len(df1), desc="compare ngrams"):
-        ngram, kpi, score, _ = compare_ngrams_s(
-            row.token_feats, df2.sent_feats.tolist(), sent, df2.index
-        )
+    for token_feats1, sent in tqdm(
+        zip(token_feats, sents), total=len(sents), desc="compare ngrams"
+    ):
+        ngram, kpi, score, _ = compare_ngrams_s(token_feats1, kpi_feats, sent, kpis)
         res.append([ngram, kpi, score])
-    ngramdf = pd.DataFrame(
-        res, columns=["ngram", "kpi_ngram", "score_ngram"], index=df1.index
-    )
-
-    return ngramdf
+    df = pd.DataFrame(res, columns=["ngram", "kpi_ngram", "score_ngram"])
+    return df
 
 
 @task
-def ducks(df):
+def ducks(sents):
     """duckling NER"""
-    df["ducks"] = [duck(x) for x in df.index]
-    return df[["ducks"]]
+    ducks = [duck(x) for x in sents]
+    return ducks
 
 
 def compare_ngrams_s(token_feats, kpi_feats, sent, kpis, ngram_limit=5):
@@ -196,7 +199,8 @@ def compare_ngrams_s(token_feats, kpi_feats, sent, kpis, ngram_limit=5):
     score = res.max()
 
     # for testing to check scores for all ngrams
-    ngramdf = pd.DataFrame()  # get_ngramdf(res, ngrams, kpis)
+    ngramdf = pd.DataFrame()
+    # get_ngramdf(res, ngrams, kpis)
 
     return ngram, kpi, score, ngramdf
 
