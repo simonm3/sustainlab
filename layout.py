@@ -29,14 +29,17 @@ from tqdm.auto import tqdm
 log = logging.getLogger()
 
 
-def pdf_to_text(pdf, output_file="output.txt"):
+def pdf_to_text(pdf, output_file="output.txt", page=None):
     """
     pdf: path to the pdf that you want to extract.
     output_file: output of  the text file
     """
     log.info(f"converting {pdf}")
     start = time()
-    images = convert_from_path(pdf, fmt="jpeg")
+    if page is not None:
+        images = convert_from_path(pdf, fmt="jpeg", first_page=page, last_page=page)
+    else:
+        images = convert_from_path(pdf, fmt="jpeg")
     log.info(f"extracted pages {round(time()-start)}")
     start = time()
 
@@ -50,7 +53,7 @@ def pdf_to_text(pdf, output_file="output.txt"):
 
     all_text = []
 
-    for i, image in tqdm(enumerate(images)):
+    for i, image in enumerate(tqdm(images)):
         # get layout
         image = np.array(image)
         layout = model.detect(image)
@@ -102,6 +105,8 @@ def pdf_to_text(pdf, output_file="output.txt"):
 
 
 if __name__ == "__main__":
-    warnings.filterwarnings("ignore")
     logging.basicConfig(level=logging.INFO)
-    pdf_to_text("/mnt/d/data1/Boskalis_Sustainability_Report_2020.pdf")
+    for logger in ["iopath", "fvcore"]:
+        logging.getLogger(logger).setLevel(logging.WARNING)
+    warnings.filterwarnings("ignore")
+    pdf_to_text("/mnt/d/data1/Boskalis_Sustainability_Report_2020.pdf", page=5)
