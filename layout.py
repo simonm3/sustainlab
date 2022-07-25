@@ -17,6 +17,7 @@ Original file is located at
 
 import logging
 from time import time
+import warnings
 
 import layoutparser as lp
 import numpy as np
@@ -33,10 +34,10 @@ def pdf_to_text(pdf, output_file="output.txt"):
     pdf: path to the pdf that you want to extract.
     output_file: output of  the text file
     """
-    log.info(f"started {pdf}")
+    log.info(f"converting {pdf}")
     start = time()
     images = convert_from_path(pdf, fmt="jpeg")
-    log.info(f"got pdf {round(time()-start)}")
+    log.info(f"extracted pages {round(time()-start)}")
     start = time()
 
     model = lp.Detectron2LayoutModel(
@@ -44,10 +45,11 @@ def pdf_to_text(pdf, output_file="output.txt"):
         extra_config=["MODEL.ROI_HEADS.SCORE_THRESH_TEST", 0.8],
         label_map={0: "Text", 1: "Title", 2: "List", 3: "Table", 4: "Figure"},
     )
-    log.info(f"got model {round(time()-start)}")
+    log.info(f"loaded model {round(time()-start)}")
     start = time()
 
     all_text = []
+
     for i, image in tqdm(enumerate(images)):
         # get layout
         image = np.array(image)
@@ -63,6 +65,10 @@ def pdf_to_text(pdf, output_file="output.txt"):
                 if not any(b.is_in(b_fig) for b_fig in figure_blocks)
             ]
         )
+        endpage = f"\n_____________________________________________page{i+1}____________________________________\n"
+        if len(text_blocks) == 0:
+            all_text.append(endpage)
+            continue
 
         # OCR
         ocr_agent = lp.TesseractAgent(languages="eng")
@@ -73,7 +79,7 @@ def pdf_to_text(pdf, output_file="output.txt"):
             text = ocr_agent.detect(segment_image)
             block.set(text=text, inplace=True)
 
-        # cluster columns
+        # cluster columns and sort by column then row
         df = pd.DataFrame()
         df["text"] = [b.text for b in text_blocks]
         df[["x0", "y0", "x1", "y1"]] = [b.coordinates for b in text_blocks]
@@ -82,10 +88,8 @@ def pdf_to_text(pdf, output_file="output.txt"):
         df["x0group"] = df.groupby("cluster").x0.transform(np.median).astype(int)
         df = df.sort_values(["x0group", "y0"])
 
-        text = (
-            "\n".join(df.text.values)
-            + f"\n_____________________________________________page{i+1}____________________________________\n"
-        )
+        # add to output
+        text = "\n".join(df.text.values) + endpage
         text = text.replace("\f", "")
         all_text.append(text)
 
@@ -98,5 +102,6 @@ def pdf_to_text(pdf, output_file="output.txt"):
 
 
 if __name__ == "__main__":
+    warnings.filterwarnings("ignore")
     logging.basicConfig(level=logging.INFO)
     pdf_to_text("/mnt/d/data1/Boskalis_Sustainability_Report_2020.pdf")
