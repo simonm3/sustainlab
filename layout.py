@@ -33,24 +33,27 @@ def pdf_to_text(pdf, output_file="output.txt"):
     pdf: path to the pdf that you want to extract.
     output_file: output of  the text file
     """
+    log.info(f"started {pdf}")
     start = time()
     images = convert_from_path(pdf, fmt="jpeg")
-    log.info(f"got pdf {time()-start}")
-    start=time.time()
+    log.info(f"got pdf {round(time()-start)}")
+    start = time()
 
     model = lp.Detectron2LayoutModel(
         "lp://PubLayNet/mask_rcnn_X_101_32x8d_FPN_3x/config",
         extra_config=["MODEL.ROI_HEADS.SCORE_THRESH_TEST", 0.8],
         label_map={0: "Text", 1: "Title", 2: "List", 3: "Table", 4: "Figure"},
     )
-    log.info(f"got model {time()-start}")
-    start=time.time()
+    log.info(f"got model {round(time()-start)}")
+    start = time()
 
     all_text = []
     for i, image in tqdm(enumerate(images)):
+        # get layout
         image = np.array(image)
         layout = model.detect(image)
 
+        # filter
         text_blocks = lp.Layout([b for b in layout if b.type == "Text"])
         figure_blocks = lp.Layout([b for b in layout if b.type == "Figure"])
         text_blocks = lp.Layout(
@@ -61,6 +64,7 @@ def pdf_to_text(pdf, output_file="output.txt"):
             ]
         )
 
+        # OCR
         ocr_agent = lp.TesseractAgent(languages="eng")
         for block in text_blocks:
             segment_image = block.pad(left=5, right=5, top=5, bottom=5).crop_image(
@@ -85,12 +89,13 @@ def pdf_to_text(pdf, output_file="output.txt"):
         text = text.replace("\f", "")
         all_text.append(text)
 
-    log.info(f"got OCR text {time()-start}")
-    start=time.time()
+    log.info(f"got OCR text {round(time()-start)}")
+    start = time()
 
     with open(output_file, "w") as text_file:
         for text in all_text:
             text_file.write(text)
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
