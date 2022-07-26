@@ -16,6 +16,7 @@ from sklearn.cluster import DBSCAN
 from tqdm.auto import tqdm
 
 log = logging.getLogger()
+logging.basicConfig(level=logging.INFO)
 
 start = time()
 model = lp.Detectron2LayoutModel(
@@ -110,7 +111,6 @@ def pdf_to_text(pdf, output_file="output.txt", page=None):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
     for logger in ["iopath", "fvcore"]:
         logging.getLogger(logger).setLevel(logging.WARNING)
     warnings.filterwarnings("ignore")
