@@ -16,18 +16,15 @@ from sklearn.cluster import DBSCAN
 from tqdm.auto import tqdm
 
 log = logging.getLogger()
-logging.basicConfig(level=logging.INFO)
 
-start = time()
 model = lp.Detectron2LayoutModel(
     "lp://PubLayNet/mask_rcnn_X_101_32x8d_FPN_3x/config",
     extra_config=["MODEL.ROI_HEADS.SCORE_THRESH_TEST", 0.8],
     label_map={0: "Text", 1: "Title", 2: "List", 3: "Table", 4: "Figure"},
 )
-log.info(f"loaded model {round(time()-start)}")
 
 
-def pdf_to_text(pdf, output_file="output.txt", page=None):
+def pdf_to_text(pdf, page=None):
     """
     pdf: path to the pdf that you want to extract.
     output_file: output of  the text file
@@ -44,7 +41,7 @@ def pdf_to_text(pdf, output_file="output.txt", page=None):
 
     # process pages
     all_text = []
-    for i, image in enumerate(tqdm(images)):
+    for image in tqdm(images):
         # get layout
         image = np.array(image)
         layout = model.detect(image)
@@ -59,9 +56,7 @@ def pdf_to_text(pdf, output_file="output.txt", page=None):
                 if not any(b.is_in(b_fig) for b_fig in figure_blocks)
             ]
         )
-        endpage = f"_____________________________________________page{i+1}____________________________________"
         if len(text_blocks) == 0:
-            all_text.append(endpage)
             continue
 
         # OCR
@@ -86,7 +81,6 @@ def pdf_to_text(pdf, output_file="output.txt", page=None):
         df.text = df.text.str.replace(r"\s*$", "")
 
         all_text.extend(df.text.values)
-        all_text.append(endpage)
 
     # merge blocks with no sentence end (.!?) with next block. can run to next page.
     merged = []
@@ -104,14 +98,22 @@ def pdf_to_text(pdf, output_file="output.txt", page=None):
 
     # create output
     text = "\n\n".join(merged)
-    with open(output_file, "w") as f:
-        f.write(text)
-    log.info(f"got OCR text {round(time()-start)}")
-    start = time()
+
+    return text
 
 
 if __name__ == "__main__":
+    pdf = "/mnt/d/data1/Boskalis_Sustainability_Report_2020.pdf"
+    page = 11
+
     for logger in ["iopath", "fvcore"]:
         logging.getLogger(logger).setLevel(logging.WARNING)
     warnings.filterwarnings("ignore")
-    pdf_to_text("/mnt/d/data1/Boskalis_Sustainability_Report_2020.pdf", page=5)
+
+    start = time()
+    log.info("loaded model. processing starting")
+    text = pdf_to_text(pdf, page=page)
+    log.info(f"total time {round(time()-start)}")
+
+    with open("output.txt", "w") as f:
+        f.write(text)
