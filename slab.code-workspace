@@ -11,6 +11,9 @@
 		},
 		{
 			"path": "../../../../../anaconda3/Lib/site-packages/prefect/orion"
+		},
+		{
+			"path": "../slab2"
 		}
 	],
 	"settings": {

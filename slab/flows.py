@@ -138,21 +138,21 @@ def compare_clean():
         path = "_".join([sent_path, f"clean_{k}"])
         gcontext.path = f"working/{path}"
         compare_sents_ = compare_sents(sent_feats_, kpi_feats_, kpis[k].tolist())
-        compare_ngrams_ = compare_ngrams(
-            token_feats_, kpi_feats_, sents, kpis[k].tolist()
-        )
+        # compare_ngrams_ = compare_ngrams(
+        #     token_feats_, kpi_feats_, sents, kpis[k].tolist()
+        # )
 
     # aggregate sent,Akpi, Akpi_topic, Avalue_field,  kpi, kpi_topic, value_field, Mkpi, Mkpi_topic, Mvalue_field,
     out = []
     for k in kpis.columns:
-        # df = pd.read_pickle(f"working/clean_clean_{k}/compare_sents")
-        # df = df.rename(columns=dict(kpi_sent=k))
-        df = pd.read_pickle(f"working/clean_clean_{k}/compare_ngrams")
-        df = df.rename(columns=dict(kpi_ngram=k))
+        df = pd.read_pickle(f"working/clean_clean_{k}/compare_sents")
+        df = df.rename(columns=dict(kpi_sent=k))
+        # df = pd.read_pickle(f"working/clean_clean_{k}/compare_ngrams")
+        # df = df.rename(columns=dict(kpi_ngram=k))
         out.append(df)
     out = pd.concat([labsents] + out, axis=1)
     out["Mkpi"] = out.kpi == out.Akpi
     out["Mtopic"] = out.topic == out.Atopic
     out["Mvalue"] = out.value == out.Avalue
     outcols = [x for x in out.columns if x.find("score") < 0]
-    out.to_excel("output/clean_ngrams.xlsx", index=False)
+    out.to_excel("output/clean_sentence_transformer.xlsx", index=False)

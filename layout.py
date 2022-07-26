@@ -18,6 +18,7 @@ Original file is located at
 import logging
 from time import time
 import warnings
+import re
 
 import layoutparser as lp
 import numpy as np
@@ -28,12 +29,21 @@ from tqdm.auto import tqdm
 
 log = logging.getLogger()
 
+start = time()
+model = lp.Detectron2LayoutModel(
+    "lp://PubLayNet/mask_rcnn_X_101_32x8d_FPN_3x/config",
+    extra_config=["MODEL.ROI_HEADS.SCORE_THRESH_TEST", 0.8],
+    label_map={0: "Text", 1: "Title", 2: "List", 3: "Table", 4: "Figure"},
+)
+log.info(f"loaded model {round(time()-start)}")
+
 
 def pdf_to_text(pdf, output_file="output.txt", page=None):
     """
     pdf: path to the pdf that you want to extract.
     output_file: output of  the text file
     """
+    # extract pages
     log.info(f"converting {pdf}")
     start = time()
     if page is not None:
@@ -43,16 +53,8 @@ def pdf_to_text(pdf, output_file="output.txt", page=None):
     log.info(f"extracted pages {round(time()-start)}")
     start = time()
 
-    model = lp.Detectron2LayoutModel(
-        "lp://PubLayNet/mask_rcnn_X_101_32x8d_FPN_3x/config",
-        extra_config=["MODEL.ROI_HEADS.SCORE_THRESH_TEST", 0.8],
-        label_map={0: "Text", 1: "Title", 2: "List", 3: "Table", 4: "Figure"},
-    )
-    log.info(f"loaded model {round(time()-start)}")
-    start = time()
-
+    # process pages
     all_text = []
-
     for i, image in enumerate(tqdm(images)):
         # get layout
         image = np.array(image)
@@ -68,7 +70,7 @@ def pdf_to_text(pdf, output_file="output.txt", page=None):
                 if not any(b.is_in(b_fig) for b_fig in figure_blocks)
             ]
         )
-        endpage = f"\n_____________________________________________page{i+1}____________________________________\n"
+        endpage = f"_____________________________________________page{i+1}____________________________________"
         if len(text_blocks) == 0:
             all_text.append(endpage)
             continue
@@ -91,17 +93,32 @@ def pdf_to_text(pdf, output_file="output.txt", page=None):
         df["x0group"] = df.groupby("cluster").x0.transform(np.median).astype(int)
         df = df.sort_values(["x0group", "y0"])
 
-        # add to output
-        text = "\n".join(df.text.values) + endpage
-        text = text.replace("\f", "")
-        all_text.append(text)
+        # remove special chars at end of block
+        df.text = df.text.str.replace(r"\s*$", "")
 
+        all_text.extend(df.text.values)
+        all_text.append(endpage)
+
+    # merge blocks with no sentence end (.!?) with next block. can run to next page.
+    merged = []
+    buffer = []
+    for text in all_text:
+        buffer.append(text)
+        # TODO bullet points without fullstops?
+        if text.endswith((".", "!", "?")):
+            # remove extra blank lines in block as OCR error?
+            merged.append("\n".join(buffer).replace("\n\n", "\n"))
+            buffer = []
+    # if last sentence does not end properly
+    if buffer:
+        merged.append("".join(buffer).replace("\n\n", "\n"))
+
+    # create output
+    text = "\n\n".join(merged)
+    with open(output_file, "w") as f:
+        f.write(text)
     log.info(f"got OCR text {round(time()-start)}")
     start = time()
-
-    with open(output_file, "w") as text_file:
-        for text in all_text:
-            text_file.write(text)
 
 
 if __name__ == "__main__":

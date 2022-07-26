@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 
 pipe = pipeline(
     "feature-extraction",
-    model="nbroad/ESG-BERT",
+    model="sentence-transformers/all-MiniLM-L6-v2",
     truncation=True,
     max_length=512,
 )
@@ -122,6 +122,7 @@ def inscope(kwtopics, esg):
 
     return df
 
+###############################################################################
 
 @task
 def token_feats(sents):
@@ -182,7 +183,7 @@ def compare_ngrams_s(token_feats, kpi_feats, sent, kpis, ngram_limit=5):
     :param ngram_limit: max number of tokens in ngrams
     :return: best ngram, kpi, score; ngramdf (ngram * target sentence * score)
     """
-    tokenizer = PreTrainedTokenizerFast.from_pretrained("nbroad/ESG-BERT")
+    tokenizer = pipe.tokenizer
     tokens = tokenizer.encode(sent)
 
     # get ngrams. note index to tokens is translated to text
