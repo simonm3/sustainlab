@@ -32,7 +32,8 @@ def pdf_to_text(pdf, page=None):
     if page is not None:
         images = convert_from_path(pdf, fmt="jpeg", first_page=page, last_page=page)
     else:
-        images = convert_from_path(pdf, fmt="jpeg")
+        pages = pdfinfo_from_path(pdf)
+        images = convert_from_path(pdf, fmt="jpeg", thread_count=pages)
 
     # process pages
     all_text = []
