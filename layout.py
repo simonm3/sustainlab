@@ -1,12 +1,11 @@
 #### dependencies
 # !pip install 'git+https://github.com/facebookresearch/detectron2.git@v0.4#egg=detectron2'
-# !pip install layoutparser[ocr] pdf2image scikit-learn tqdm
+# !pip install layoutparser[ocr] numpy pandas pdf2image scikit-learn tqdm
 # !sudo apt-get install poppler-utils tesseract-ocr
 
 import logging
 from time import time
 import warnings
-import re
 
 import layoutparser as lp
 import numpy as np
@@ -30,14 +29,10 @@ def pdf_to_text(pdf, page=None):
     output_file: output of  the text file
     """
     # extract pages
-    log.info(f"converting {pdf}")
-    start = time()
     if page is not None:
         images = convert_from_path(pdf, fmt="jpeg", first_page=page, last_page=page)
     else:
         images = convert_from_path(pdf, fmt="jpeg")
-    log.info(f"extracted pages {round(time()-start)}")
-    start = time()
 
     # process pages
     all_text = []
