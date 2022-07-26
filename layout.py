@@ -100,8 +100,8 @@ def pdf_to_text(pdf, page=None):
 
 if __name__ == "__main__":
     pdf = "/mnt/d/data1/Boskalis_Sustainability_Report_2020.pdf"
-    page = 11
-
+    page = 5
+    logging.basicConfig(level=logging.INFO)
     for logger in ["iopath", "fvcore"]:
         logging.getLogger(logger).setLevel(logging.WARNING)
     warnings.filterwarnings("ignore")
