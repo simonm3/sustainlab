@@ -4,19 +4,11 @@
 			"path": "."
 		},
 		{
-			"path": "../pipex"
+			"path": "..\\pipex"
 		},
 		{
-			"path": "../orion"
-		},
-		{
-			"path": "../../../../../anaconda3/Lib/site-packages/prefect/orion"
-		},
-		{
-			"path": "../slab2"
+			"path": "..\\slab2"
 		}
 	],
-	"settings": {
-		"makefile.extensionOutputFolder": "./.vscode"
-	}
+	"settings": {}
 }

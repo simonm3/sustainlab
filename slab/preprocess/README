@@ -1,0 +1,55 @@
+Preprocessing
+=============
+
+This folder is for extracting text from pdfs and filtering to include sentences with KPIs.
+
+Scripts
+=======
+
+scripts/preprocess.py is an example script that runs the pipeline
+
+ISSUES/TODO
+===========
+
+* Is there a direct text method instead of OCR?
+* How could OCR be faster?
+* 99% of documents are rejected so could the rejected text be used e.g summaries by topic?
+
+Source files
+============
+
+flows - control code to run the tasks
+
+extract - tasks for pdf2text
+
+filter - tasks to filter text
+* keeps sentences with verb, two nouns and a number
+* uses keyword matches combined with esg model to filter out of scope sentences
+
+prefectx - code to disable prefect
+
+Prefect
+=======
+
+Code runs without prefect if not installed or DISABLE_PREFECT="True". You can run a prefect task directly calling task.fn() Prefect only allows task() inside a flow so for testing it can be easier to disable prefect.
+
+Benefits of prefect:
+* automatically caches results using a cache key based on taskname, source code and inputs 
+* can be scaled up to use parallel processing later
+* prefect has numerous other features that help orchestrate tasks
+
+Prefect orion
+=============
+
+Benefits of prefect server
+* view progress of flows
+* more robust
+* uses postgres rather than sqlite
+* can use local server, local docker container, prefect cloud or self hosted server
+
+To enable prefect server on local docker container (optional):
+* clone github/simonm3/orion
+* cd orion
+* make build
+* make up
+* uncomment environment setting to use localhost:4200
