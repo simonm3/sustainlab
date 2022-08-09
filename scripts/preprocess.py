@@ -1,15 +1,16 @@
 import os
 import warnings
 
-# TODO put in slab.__init__.py once finalised
-# SETTINGS
-# os.environ["DISABLE_PREFECT"] = "True"
-os.environ["PREFECT_API_URL"] = "http://127.0.0.1:4200/api"
+###########################################################
+# TODO SETTINGS FOR slab.__init__.py once finalised
 os.environ["PREFECT_LOGGING_SETTINGS_PATH"] = f"{os.path.dirname(__file__)}/logging.yml"
-# remove pytorch parallelism as conflicts with prefect2 even in sequential runner
-os.environ["TOKENIZERS_PARALLELISM"] = "False"
-os.environ["OMP_NUM_THREADS"] = "1"
+# os.environ["PREFECT_API_URL"] = "http://127.0.0.1:4200/api"
+# os.environ["DISABLE_PREFECT"] = "True"
+# TODO may be needed if there is a conflict
+# os.environ["TOKENIZERS_PARALLELISM"] = "False"
+# os.environ["OMP_NUM_THREADS"] = "1"
 
+#######################################################
 # import after settings
 from slab.prefectx import flow
 from slab.preprocess import flows

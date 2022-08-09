@@ -26,6 +26,7 @@ model = lp.Detectron2LayoutModel(
 def decrypt(path):
     """decrypt pdf. pypdf2 cannot read encrypted even if no password"""
     outpath = f"reports_decrypted/{os.path.basename(path)}"
+    os.makedirs(os.path.dirname(outpath), exist_ok=True)
     if PyPDF2.PdfFileReader(path).is_encrypted:
         pikepdf.Pdf.open(path).save(outpath)
     else:
@@ -44,8 +45,6 @@ def pdf2images(pdf, first_page=None, last_page=None):
         images = convert_from_path(
             pdf, fmt="jpeg", first_page=first_page, last_page=last_page
         )
-        with open("temp", "a") as f:
-            f.write(str(type(images)))
     else:
         pages = pdfinfo_from_path(pdf)
         images = convert_from_path(pdf, fmt="jpeg", thread_count=pages)

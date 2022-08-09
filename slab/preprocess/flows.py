@@ -7,6 +7,9 @@ log = logging.getLogger(__name__)
 
 def flow1(pdf, first_page, last_page):
 
+    # at top because no upstream
+    topic2kw = filter.topic2kw()
+
     # extract images
     pdf = extract.decrypt(pdf)
     images = extract.pdf2images(pdf, first_page, last_page)
@@ -25,7 +28,6 @@ def flow1(pdf, first_page, last_page):
     sents = sents[sents.accepted].text
 
     # inscope
-    topic2kw = filter.topic2kw()
     kwtopics = filter.kwtopics(sents, topic2kw)
     esg = filter.esg(sents)
     df = filter.inscope(kwtopics, esg)
