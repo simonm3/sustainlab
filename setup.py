@@ -11,13 +11,13 @@ params = dict(
     description='slab',
     version='0.0.0',
     url='https://dagshub.com/Omdena/SustainLab.git',
-    install_requires=['spacy', 'transformers', 'numpy', 'Requests', 'pikepdf', 'pdf2image',
-                      'pandas', 'tqdm', 'PyPDF2', 'layoutparser', 'prefect', 'preprocess', 'scikit_learn', 'dask'],
+    install_requires=['spacy', 'scikit_learn', 'Requests', 'layoutparser', 'numpy', 'dask',
+                      'pikepdf', 'prefect', 'pandas', 'tqdm', 'PyPDF2', 'pdf2image', 'transformers'],
     packages=['slab', 'slab.model', 'slab.preprocess'],
-    package_data={},
+    package_data={'slab': ['logging.yml'], 'slab/preprocess': ['README']},
     include_package_data=True,
     py_modules=[],
-    scripts=None)
+    scripts=['scripts/preprocess.py'])
 
 ########## EDIT BELOW THIS LINE ONLY ##########
 

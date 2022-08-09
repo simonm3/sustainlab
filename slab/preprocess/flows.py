@@ -1,32 +1,33 @@
 from . import extract
 from . import filter
-from . import flow
+from ..prefectx import flow
 import logging
 
 log = logging.getLogger(__name__)
 
-
-@flow
 def flow1(pdf, first_page, last_page):
 
-    log.info("decrypt")
+    # extract images
     pdf = extract.decrypt(pdf)
+    images = extract.pdf2images(pdf, first_page, last_page)
+    images = images.wait().result()
 
-    log.info("pdf2text")
-    text = extract.pdf_to_text(pdf, first_page, last_page)
+    # ocr
+    all_text = []
+    for image in images:
+        text = extract.image2text(image)
+        all_text.append(text)
 
-    log.info("filter")
-    sents = filter.sentence_filter(text)
+    # merge and filter
+    merged = extract.merge_pages(all_text)
+    sents = filter.sentence_filter(merged)
+    sents = sents.wait().result()
     sents = sents[sents.accepted].text
 
-    log.info("kwtopics")
+    # inscope
     topic2kw = filter.topic2kw()
     kwtopics = filter.kwtopics(sents, topic2kw)
-
-    log.info("esg")
     esg = filter.esg(sents)
-
-    log.info("inscope")
     df = filter.inscope(kwtopics, esg)
 
     return df

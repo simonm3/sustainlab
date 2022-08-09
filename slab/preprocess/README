@@ -7,6 +7,7 @@ Scripts
 =======
 
 scripts/preprocess.py is an example script that runs the pipeline
+output.xlsx shows the sentences extracted from Boskalis pages 5-9.
 
 ISSUES/TODO
 ===========
@@ -31,12 +32,19 @@ prefectx - code to disable prefect
 Prefect
 =======
 
-Code runs without prefect if not installed or DISABLE_PREFECT="True". You can run a prefect task directly calling task.fn() Prefect only allows task() inside a flow so for testing it can be easier to disable prefect.
+To run tasks without prefect:
+* run tasks normally if prefect not installed
+* OR set DISABLE_PREFECT="True" and run tasks normally
+* OR run task.fn(). Note prefect does not  allow tasks to be run directly outside a flow
+
+Flows will not run without prefect as they use "wait" and "result".
 
 Benefits of prefect:
-* automatically caches results using a cache key based on taskname, source code and inputs 
-* can be scaled up to use parallel processing later
-* prefect has numerous other features that help orchestrate tasks
+* monitor tasks
+* log timings
+* cache results using a cache key based on taskname, source code and inputs 
+* scale up to use parallel processing later
+* many other features that help orchestrate tasks
 
 Prefect orion
 =============

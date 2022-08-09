@@ -6,7 +6,7 @@ import spacy
 from tqdm.auto import tqdm
 from transformers import pipeline
 
-from . import task
+from ..prefectx import task
 
 log = logging.getLogger(__name__)
 

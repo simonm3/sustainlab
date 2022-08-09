@@ -11,7 +11,7 @@ from pdf2image import convert_from_path, pdfinfo_from_path
 from sklearn.cluster import DBSCAN
 from tqdm.auto import tqdm
 
-from . import task
+from ..prefectx import task
 
 log = logging.getLogger(__name__)
 
@@ -35,76 +35,64 @@ def decrypt(path):
 
 
 @task
-def pdf_to_text(pdf, first_page=None, last_page=None):
+def pdf2images(pdf, first_page=None, last_page=None):
     """
     pdf: path to the pdf that you want to extract.
-    output_file: output of  the text file
     """
     # extract pages
     if first_page is not None:
         images = convert_from_path(
             pdf, fmt="jpeg", first_page=first_page, last_page=last_page
         )
+        with open("temp", "a") as f:
+            f.write(str(type(images)))
     else:
         pages = pdfinfo_from_path(pdf)
         images = convert_from_path(pdf, fmt="jpeg", thread_count=pages)
 
-    # process pages
-    all_text = []
-    for image in tqdm(images):
-        # get layout
-        from time import time
+    return images
 
-        start = time()
 
-        image = np.array(image)
-        layout = model.detect(image)
+@task
+def image2text(image):
+    image = np.array(image)
+    layout = model.detect(image)
 
-        # filter
-        text_blocks = lp.Layout([b for b in layout if b.type == "Text"])
-        figure_blocks = lp.Layout([b for b in layout if b.type == "Figure"])
-        text_blocks = lp.Layout(
-            [
-                b
-                for b in text_blocks
-                if not any(b.is_in(b_fig) for b_fig in figure_blocks)
-            ]
-        )
-        if len(text_blocks) == 0:
-            continue
+    # filter
+    text_blocks = lp.Layout([b for b in layout if b.type == "Text"])
+    figure_blocks = lp.Layout([b for b in layout if b.type == "Figure"])
+    text_blocks = lp.Layout(
+        [b for b in text_blocks if not any(b.is_in(b_fig) for b_fig in figure_blocks)]
+    )
+    if len(text_blocks) == 0:
+        return []
 
-        # OCR
-        log.info(time() - start)
-        start = time()
-        ocr_agent = lp.TesseractAgent(languages="eng")
-        log.info(time() - start)
-        start = time()
-        for block in text_blocks:
-            segment_image = block.pad(left=5, right=5, top=5, bottom=5).crop_image(
-                image
-            )
-            text = ocr_agent.detect(segment_image)
-            block.set(text=text, inplace=True)
-        log.info(time() - start)
-        start = time()
+    # OCR
+    ocr_agent = lp.TesseractAgent(languages="eng")
+    for block in text_blocks:
+        segment_image = block.pad(left=5, right=5, top=5, bottom=5).crop_image(image)
+        text = ocr_agent.detect(segment_image)
+        block.set(text=text, inplace=True)
 
-        # cluster columns and sort by column then row
-        df = pd.DataFrame()
-        df["text"] = [b.text for b in text_blocks]
-        df[["x0", "y0", "x1", "y1"]] = [b.coordinates for b in text_blocks]
-        db = DBSCAN(eps=15, min_samples=1)
-        df["cluster"] = db.fit_predict(np.array(df.x0.values).reshape(-1, 1))
-        df["x0group"] = df.groupby("cluster").x0.transform(np.median).astype(int)
-        df = df.sort_values(["x0group", "y0"])
+    # cluster columns and sort by column then row
+    df = pd.DataFrame()
+    df["text"] = [b.text for b in text_blocks]
+    df[["x0", "y0", "x1", "y1"]] = [b.coordinates for b in text_blocks]
+    db = DBSCAN(eps=15, min_samples=1)
+    df["cluster"] = db.fit_predict(np.array(df.x0.values).reshape(-1, 1))
+    df["x0group"] = df.groupby("cluster").x0.transform(np.median).astype(int)
+    df = df.sort_values(["x0group", "y0"])
 
-        # remove special chars at end of block
-        df.text = df.text.str.replace(r"\s*$", "", regex=True)
+    # remove special chars at end of block
+    df.text = df.text.str.replace(r"\s*$", "", regex=True)
 
-        all_text.extend(df.text.values)
+    return df.text.tolist()
 
-        log.info(time() - start)
-        start = time()
 
+@task
+def merge_pages(all_text):
+    # list of lists to list
+    all_text = sum(all_text, [])
     # merge blocks with no sentence end (.!?) with next block. can run to next page.
     merged = []
     buffer = []
